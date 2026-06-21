@@ -1,0 +1,13 @@
+.*
+!.gitignore
+!.dockerignore
+!.env.example
+docs/
+/bin/
+/app
+*.exe
+tmp/
+*.test
+*.out
+coverage.*
+vendor/
