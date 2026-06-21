@@ -1,0 +1,84 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: wst
+      POSTGRES_PASSWORD: wst
+      POSTGRES_DB: wst
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wst -d wst"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    build: .
+    command: ["-migrate", "up"]
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: wst
+      POSTGRES_PASSWORD: wst
+      POSTGRES_DB: wst
+      POSTGRES_SSLMODE: disable
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build: .
+    environment:
+      APP_ENV: local
+      APP_PORT: "8080"
+      LOG_LEVEL: info
+      CORS_ORIGINS: "*"
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: wst
+      POSTGRES_PASSWORD: wst
+      POSTGRES_DB: wst
+      POSTGRES_SSLMODE: disable
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: proofs
+      MINIO_USE_SSL: "false"
+      PRICE_STANDARD: "10000"
+      PRICE_ELECTRONIC: "50000"
+      SWEEP_INTERVAL: 1m
+      ORGANIC_TTL: 72h
+      PICKUP_RATE_RPM: "30"
+      PICKUP_RATE_BURST: "10"
+    ports:
+      - "8080:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      minio:
+        condition: service_healthy
+
+volumes:
+  db-data:
+  minio-data:

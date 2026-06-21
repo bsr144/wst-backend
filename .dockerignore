@@ -1,0 +1,16 @@
+.git
+.github
+.claude
+CONTEXT.md
+docs
+README.md
+bin
+tmp
+*_test.go
+test
+.env
+.env.*
+.gitignore
+.air.toml
+Dockerfile
+docker-compose.yml
