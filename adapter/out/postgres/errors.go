@@ -21,7 +21,7 @@ func mapError(err error) error {
 	if isUnavailable(err) {
 		return apperr.Unavailable("SERVICE_UNAVAILABLE", "service temporarily unavailable").WithCause(err)
 	}
-	return err
+	return apperr.Internal("INTERNAL_ERROR", "database error").WithCause(err)
 }
 
 func isUnavailable(err error) bool {

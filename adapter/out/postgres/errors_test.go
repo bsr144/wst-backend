@@ -31,6 +31,7 @@ func TestMapError_ClassifiesInfraErrors(t *testing.T) {
 		err         error
 		wantNil     bool
 		unavailable bool
+		internal    bool
 		same        error
 	}{
 		{name: "nil stays nil", err: nil, wantNil: true},
@@ -41,9 +42,9 @@ func TestMapError_ClassifiesInfraErrors(t *testing.T) {
 		{name: "pg operator intervention class 57", err: &pgconn.PgError{Code: "57014"}, unavailable: true},
 		{name: "pg connect error", err: &pgconn.ConnectError{}, unavailable: true},
 		{name: "raw net error", err: timeoutNetErr{}, unavailable: true},
-		{name: "fk violation passes through", err: fkViolation, same: fkViolation},
+		{name: "unclassified pg error wraps to internal", err: fkViolation, internal: true},
 		{name: "domain apperr passes through", err: domainConflict, same: domainConflict},
-		{name: "generic error passes through", err: generic, same: generic},
+		{name: "generic error wraps to internal", err: generic, internal: true},
 	}
 
 	for _, tc := range tests {
@@ -59,6 +60,12 @@ func TestMapError_ClassifiesInfraErrors(t *testing.T) {
 				require.True(t, ok)
 				assert.Equal(t, apperr.KindUnavailable, ae.Kind)
 				assert.Equal(t, "SERVICE_UNAVAILABLE", ae.Code)
+				assert.ErrorIs(t, got, tc.err)
+			case tc.internal:
+				ae, ok := apperr.From(got)
+				require.True(t, ok)
+				assert.Equal(t, apperr.KindInternal, ae.Kind)
+				assert.Equal(t, "INTERNAL_ERROR", ae.Code)
 				assert.ErrorIs(t, got, tc.err)
 			default:
 				assert.Equal(t, tc.same, got)
