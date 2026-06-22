@@ -8,6 +8,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	httpx "wst-backend/adapter/in/http"
+	"wst-backend/adapter/in/http/handler"
 	"wst-backend/adapter/in/http/middleware"
 	"wst-backend/adapter/in/worker"
 	"wst-backend/adapter/out/clock"
@@ -15,6 +16,7 @@ import (
 	"wst-backend/adapter/out/storage"
 	"wst-backend/config"
 	"wst-backend/core/port/out"
+	"wst-backend/core/service"
 )
 
 type App struct {
@@ -54,6 +56,11 @@ func New(ctx context.Context, cfg config.Config, logger *zap.Logger) (*App, erro
 
 	server := httpx.NewServer(cfg, logger, ready, limiter)
 	scheduler := worker.New(logger)
+
+	householdRepo := postgres.NewHouseholdRepository(pool)
+	householdService := service.NewHouseholdService(householdRepo, clk)
+	householdHandler := handler.NewHouseholdHandler(householdService)
+	httpx.RegisterRoutes(server.API(), householdHandler)
 
 	return &App{
 		cfg:       cfg,
