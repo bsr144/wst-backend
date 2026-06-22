@@ -43,18 +43,18 @@ func NewHouseholdRepository(pool *pgxpool.Pool) *HouseholdRepository {
 func (r *HouseholdRepository) Insert(ctx context.Context, h domain.Household) error {
 	const query = `INSERT INTO households (id, owner_name, address, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)`
 	_, err := Executor(ctx, r.pool).Exec(ctx, query, h.ID, h.OwnerName, h.Address, h.CreatedAt, h.UpdatedAt)
-	return err
+	return mapError(err)
 }
 
 func (r *HouseholdRepository) List(ctx context.Context, limit, offset int) ([]domain.Household, error) {
 	const query = `SELECT id, owner_name, address, created_at, updated_at FROM households ORDER BY created_at DESC LIMIT $1 OFFSET $2`
 	rows, err := Executor(ctx, r.pool).Query(ctx, query, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, mapError(err)
 	}
 	collected, err := pgx.CollectRows(rows, pgx.RowToStructByName[householdRow])
 	if err != nil {
-		return nil, err
+		return nil, mapError(err)
 	}
 	households := make([]domain.Household, 0, len(collected))
 	for _, row := range collected {
@@ -67,7 +67,7 @@ func (r *HouseholdRepository) Count(ctx context.Context) (int, error) {
 	const query = `SELECT count(*) FROM households`
 	var total int
 	if err := Executor(ctx, r.pool).QueryRow(ctx, query).Scan(&total); err != nil {
-		return 0, err
+		return 0, mapError(err)
 	}
 	return total, nil
 }
@@ -76,14 +76,14 @@ func (r *HouseholdRepository) FindByID(ctx context.Context, id uuid.UUID) (domai
 	const query = `SELECT id, owner_name, address, created_at, updated_at FROM households WHERE id = $1`
 	rows, err := Executor(ctx, r.pool).Query(ctx, query, id)
 	if err != nil {
-		return domain.Household{}, err
+		return domain.Household{}, mapError(err)
 	}
 	row, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[householdRow])
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Household{}, domain.ErrHouseholdNotFound
 		}
-		return domain.Household{}, err
+		return domain.Household{}, mapError(err)
 	}
 	return row.toDomain(), nil
 }
@@ -96,7 +96,7 @@ func (r *HouseholdRepository) Delete(ctx context.Context, id uuid.UUID) error {
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
 			return domain.ErrHouseholdHasDependents
 		}
-		return err
+		return mapError(err)
 	}
 	if tag.RowsAffected() == 0 {
 		return domain.ErrHouseholdNotFound

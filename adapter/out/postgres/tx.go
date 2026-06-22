@@ -48,13 +48,13 @@ func (m *TxManager) Do(ctx context.Context, fn func(ctx context.Context) error) 
 	}
 	tx, err := m.pool.Begin(ctx)
 	if err != nil {
-		return err
+		return mapError(err)
 	}
 	if err := fn(withTx(ctx, tx)); err != nil {
 		_ = tx.Rollback(ctx)
 		return err
 	}
-	return tx.Commit(ctx)
+	return mapError(tx.Commit(ctx))
 }
 
 var _ out.TxManager = (*TxManager)(nil)
