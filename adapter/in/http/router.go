@@ -13,3 +13,12 @@ func RegisterRoutes(api fiber.Router, h *handler.HouseholdHandler) {
 	households.Get("/:id", h.Get)
 	households.Delete("/:id", h.Delete)
 }
+
+func RegisterPickupRoutes(api fiber.Router, h *handler.PickupHandler, rateLimit fiber.Handler) {
+	pickups := api.Group("/pickups")
+	pickups.Post("/", rateLimit, h.Create)
+	pickups.Get("/", h.List)
+	pickups.Put("/:id/schedule", h.Schedule)
+	pickups.Put("/:id/complete", h.Complete)
+	pickups.Put("/:id/cancel", h.Cancel)
+}

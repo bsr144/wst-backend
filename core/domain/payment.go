@@ -26,3 +26,15 @@ type Payment struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
+
+type Pricing struct {
+	Standard   decimal.Decimal
+	Electronic decimal.Decimal
+}
+
+func (p Pricing) AmountFor(t PickupType) decimal.Decimal {
+	if t == PickupElectronic {
+		return p.Electronic
+	}
+	return p.Standard
+}

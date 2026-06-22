@@ -15,6 +15,7 @@ import (
 	"wst-backend/adapter/out/postgres"
 	"wst-backend/adapter/out/storage"
 	"wst-backend/config"
+	"wst-backend/core/domain"
 	"wst-backend/core/port/out"
 	"wst-backend/core/service"
 )
@@ -61,6 +62,12 @@ func New(ctx context.Context, cfg config.Config, logger *zap.Logger) (*App, erro
 	householdService := service.NewHouseholdService(householdRepo, clk)
 	householdHandler := handler.NewHouseholdHandler(householdService)
 	httpx.RegisterRoutes(server.API(), householdHandler)
+
+	pickupRepo := postgres.NewPickupRepository(pool)
+	paymentRepo := postgres.NewPaymentRepository(pool)
+	pickupService := service.NewPickupService(pickupRepo, paymentRepo, txManager, clk, domain.Pricing{Standard: cfg.Pricing.Standard, Electronic: cfg.Pricing.Electronic})
+	pickupHandler := handler.NewPickupHandler(pickupService)
+	httpx.RegisterPickupRoutes(server.API(), pickupHandler, server.PickupRateLimit())
 
 	return &App{
 		cfg:       cfg,
