@@ -1,6 +1,7 @@
 package validatorx
 
 import (
+	"reflect"
 	"strings"
 	"sync"
 
@@ -17,6 +18,13 @@ var (
 func instance() *validator.Validate {
 	once.Do(func() {
 		validate = validator.New(validator.WithRequiredStructEnabled())
+		validate.RegisterTagNameFunc(func(field reflect.StructField) string {
+			name := strings.SplitN(field.Tag.Get("json"), ",", 2)[0]
+			if name == "-" {
+				return ""
+			}
+			return name
+		})
 	})
 	return validate
 }
@@ -33,7 +41,7 @@ func Struct(s any) *apperr.Error {
 	details := make([]apperr.FieldError, 0, len(verrs))
 	for _, fe := range verrs {
 		details = append(details, apperr.FieldError{
-			Field:  strings.ToLower(fe.Field()),
+			Field:  fe.Field(),
 			Reason: reason(fe),
 		})
 	}
