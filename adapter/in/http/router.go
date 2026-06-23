@@ -27,4 +27,5 @@ func RegisterPaymentRoutes(api fiber.Router, h *handler.PaymentHandler) {
 	payments := api.Group("/payments")
 	payments.Post("/", h.Create)
 	payments.Get("/", h.List)
+	payments.Put("/:id/confirm", h.Confirm)
 }

@@ -10,10 +10,13 @@ func TestValidate_ProductionGates(t *testing.T) {
 	t.Parallel()
 
 	base := Config{
-		AppEnv:      "production",
-		CORSOrigins: "https://app.example.com",
-		Postgres:    Postgres{SSLMode: "require", Password: "secret"},
-		MinIO:       MinIO{AccessKey: "key", SecretKey: "secret"},
+		AppEnv:             "production",
+		CORSOrigins:        "https://app.example.com",
+		BodyLimitBytes:     6 << 20,
+		UploadLimitBytes:   5 << 20,
+		UploadAllowedTypes: []string{"image/jpeg", "image/png", "application/pdf"},
+		Postgres:           Postgres{SSLMode: "require", Password: "secret"},
+		MinIO:              MinIO{AccessKey: "key", SecretKey: "secret"},
 	}
 
 	tests := []struct {
@@ -22,6 +25,8 @@ func TestValidate_ProductionGates(t *testing.T) {
 		wantErr bool
 	}{
 		{"valid production", func(c *Config) {}, false},
+		{"upload limit not smaller than body limit rejected", func(c *Config) { c.UploadLimitBytes = int64(c.BodyLimitBytes) }, true},
+		{"empty allowed upload types rejected", func(c *Config) { c.UploadAllowedTypes = nil }, true},
 		{"sslmode disable rejected", func(c *Config) { c.Postgres.SSLMode = "disable" }, true},
 		{"cors wildcard rejected", func(c *Config) { c.CORSOrigins = "*" }, true},
 		{"empty db password rejected", func(c *Config) { c.Postgres.Password = "" }, true},

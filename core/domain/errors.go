@@ -17,4 +17,6 @@ var (
 	ErrPaymentNotPending        = apperr.Conflict("PAYMENT_NOT_PENDING", "payment must be pending to confirm")
 	ErrPaymentAlreadyExists     = apperr.Conflict("PAYMENT_ALREADY_EXISTS", "a payment already exists for this pickup")
 	ErrPaymentHouseholdMismatch = apperr.Unprocessable("PAYMENT_HOUSEHOLD_MISMATCH", "household does not match the pickup")
+
+	ErrStorageUnavailable = apperr.Unavailable("STORAGE_UNAVAILABLE", "file storage temporarily unavailable")
 )

@@ -5,20 +5,22 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
 )
 
 type Config struct {
-	AppEnv           string
-	AppPort          string
-	LogLevel         string
-	CORSOrigins      string
-	RequestTimeout   time.Duration
-	ShutdownTimeout  time.Duration
-	BodyLimitBytes   int
-	UploadLimitBytes int64
+	AppEnv             string
+	AppPort            string
+	LogLevel           string
+	CORSOrigins        string
+	RequestTimeout     time.Duration
+	ShutdownTimeout    time.Duration
+	BodyLimitBytes     int
+	UploadLimitBytes   int64
+	UploadAllowedTypes []string
 
 	Postgres  Postgres
 	MinIO     MinIO
@@ -72,14 +74,15 @@ type RateLimit struct {
 
 func Load() (Config, error) {
 	cfg := Config{
-		AppEnv:           env("APP_ENV", "local"),
-		AppPort:          env("APP_PORT", "8080"),
-		LogLevel:         env("LOG_LEVEL", "info"),
-		CORSOrigins:      env("CORS_ORIGINS", "*"),
-		RequestTimeout:   envDuration("REQUEST_TIMEOUT", 5*time.Second),
-		ShutdownTimeout:  envDuration("SHUTDOWN_TIMEOUT", 10*time.Second),
-		BodyLimitBytes:   int(envInt64("BODY_LIMIT_BYTES", 1<<20)),
-		UploadLimitBytes: envInt64("UPLOAD_LIMIT_BYTES", 5<<20),
+		AppEnv:             env("APP_ENV", "local"),
+		AppPort:            env("APP_PORT", "8080"),
+		LogLevel:           env("LOG_LEVEL", "info"),
+		CORSOrigins:        env("CORS_ORIGINS", "*"),
+		RequestTimeout:     envDuration("REQUEST_TIMEOUT", 5*time.Second),
+		ShutdownTimeout:    envDuration("SHUTDOWN_TIMEOUT", 10*time.Second),
+		BodyLimitBytes:     int(envInt64("BODY_LIMIT_BYTES", 6<<20)),
+		UploadLimitBytes:   envInt64("UPLOAD_LIMIT_BYTES", 5<<20),
+		UploadAllowedTypes: envStrings("UPLOAD_ALLOWED_TYPES", "image/jpeg,image/png,application/pdf"),
 		Postgres: Postgres{
 			Host:              env("POSTGRES_HOST", "localhost"),
 			Port:              env("POSTGRES_PORT", "5432"),
@@ -128,6 +131,12 @@ func Load() (Config, error) {
 }
 
 func (c Config) Validate() error {
+	if c.UploadLimitBytes >= int64(c.BodyLimitBytes) {
+		return errors.New("config: UPLOAD_LIMIT_BYTES must be smaller than BODY_LIMIT_BYTES")
+	}
+	if len(c.UploadAllowedTypes) == 0 {
+		return errors.New("config: UPLOAD_ALLOWED_TYPES must list at least one content type")
+	}
 	if c.AppEnv != "production" {
 		return nil
 	}
@@ -151,6 +160,18 @@ func env(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func envStrings(key, def string) []string {
+	raw := env(key, def)
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func envInt64(key string, def int64) int64 {

@@ -105,4 +105,36 @@ func (r *PaymentRepository) Count(ctx context.Context, status *domain.PaymentSta
 	return total, nil
 }
 
+func (r *PaymentRepository) FindByID(ctx context.Context, id uuid.UUID) (domain.Payment, error) {
+	const query = `SELECT id, household_id, waste_id, amount, payment_date, status, proof_file_url, created_at, updated_at FROM payments WHERE id = $1`
+	rows, err := Executor(ctx, r.pool).Query(ctx, query, id)
+	if err != nil {
+		return domain.Payment{}, mapError(err)
+	}
+	row, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[paymentRow])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Payment{}, domain.ErrPaymentNotFound
+		}
+		return domain.Payment{}, mapError(err)
+	}
+	return row.toDomain(), nil
+}
+
+func (r *PaymentRepository) Confirm(ctx context.Context, id uuid.UUID, proofURL string, now time.Time) (domain.Payment, bool, error) {
+	const query = `UPDATE payments SET status = 'paid', proof_file_url = $2, payment_date = $3, updated_at = $3 WHERE id = $1 AND status = 'pending' RETURNING id, household_id, waste_id, amount, payment_date, status, proof_file_url, created_at, updated_at`
+	rows, err := Executor(ctx, r.pool).Query(ctx, query, id, proofURL, now)
+	if err != nil {
+		return domain.Payment{}, false, mapError(err)
+	}
+	row, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[paymentRow])
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Payment{}, false, nil
+		}
+		return domain.Payment{}, false, mapError(err)
+	}
+	return row.toDomain(), true, nil
+}
+
 var _ out.PaymentRepository = (*PaymentRepository)(nil)

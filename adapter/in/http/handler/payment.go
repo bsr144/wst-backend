@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -16,12 +18,28 @@ import (
 	"wst-backend/pkg/validatorx"
 )
 
-type PaymentHandler struct {
-	svc in.PaymentService
+type UploadPolicy struct {
+	MaxBytes     int64
+	AllowedTypes []string
 }
 
-func NewPaymentHandler(svc in.PaymentService) *PaymentHandler {
-	return &PaymentHandler{svc: svc}
+func (p UploadPolicy) allows(contentType string) bool {
+	ct := strings.TrimSpace(strings.SplitN(contentType, ";", 2)[0])
+	for _, allowed := range p.AllowedTypes {
+		if strings.EqualFold(allowed, ct) {
+			return true
+		}
+	}
+	return false
+}
+
+type PaymentHandler struct {
+	svc    in.PaymentService
+	upload UploadPolicy
+}
+
+func NewPaymentHandler(svc in.PaymentService, upload UploadPolicy) *PaymentHandler {
+	return &PaymentHandler{svc: svc, upload: upload}
 }
 
 func (h *PaymentHandler) Create(c *fiber.Ctx) error {
@@ -80,6 +98,56 @@ func (h *PaymentHandler) List(c *fiber.Ctx) error {
 		return presenter.Error(c, svcErr)
 	}
 	return presenter.List(c, fiber.StatusOK, dto.NewPaymentResponses(items), pagination.NewMeta(params, total))
+}
+
+func (h *PaymentHandler) Confirm(c *fiber.Ctx) error {
+	id, err := parseID(c.Params("id"))
+	if err != nil {
+		return presenter.Error(c, err)
+	}
+
+	fileHeader, err := c.FormFile("proof")
+	if err != nil {
+		return presenter.Error(c, apperr.Validation("VALIDATION_ERROR", "invalid request").
+			WithDetails(apperr.FieldError{Field: "proof", Reason: "a proof file is required"}))
+	}
+	if fileHeader.Size > h.upload.MaxBytes {
+		return presenter.Error(c, apperr.Validation("VALIDATION_ERROR", "invalid request").
+			WithDetails(apperr.FieldError{Field: "proof", Reason: "file exceeds the maximum allowed size"}))
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		return presenter.Error(c, apperr.Validation("VALIDATION_ERROR", "invalid request").
+			WithDetails(apperr.FieldError{Field: "proof", Reason: "could not read the uploaded file"}))
+	}
+	defer file.Close()
+
+	head := make([]byte, 512)
+	n, err := io.ReadFull(file, head)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		return presenter.Error(c, apperr.Validation("VALIDATION_ERROR", "invalid request").
+			WithDetails(apperr.FieldError{Field: "proof", Reason: "could not read the uploaded file"}))
+	}
+	contentType := http.DetectContentType(head[:n])
+	if !h.upload.allows(contentType) {
+		return presenter.Error(c, apperr.Validation("VALIDATION_ERROR", "invalid request").
+			WithDetails(apperr.FieldError{Field: "proof", Reason: "unsupported content type"}))
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return presenter.Error(c, apperr.Validation("VALIDATION_ERROR", "invalid request").
+			WithDetails(apperr.FieldError{Field: "proof", Reason: "could not read the uploaded file"}))
+	}
+
+	payment, svcErr := h.svc.Confirm(c.UserContext(), id, in.ConfirmPaymentInput{
+		Reader:      file,
+		Size:        fileHeader.Size,
+		ContentType: contentType,
+	})
+	if svcErr != nil {
+		return presenter.Error(c, svcErr)
+	}
+	return presenter.Success(c, fiber.StatusOK, dto.NewPaymentResponse(payment))
 }
 
 func buildPaymentFilter(query dto.ListPaymentsQuery) (in.PaymentFilter, error) {

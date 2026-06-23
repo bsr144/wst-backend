@@ -70,8 +70,11 @@ func New(ctx context.Context, cfg config.Config, logger *zap.Logger) (*App, erro
 	pickupHandler := handler.NewPickupHandler(pickupService)
 	httpx.RegisterPickupRoutes(server.API(), pickupHandler, server.PickupRateLimit())
 
-	paymentService := service.NewPaymentService(paymentRepo, pickupRepo, clk, pricing)
-	paymentHandler := handler.NewPaymentHandler(paymentService)
+	paymentService := service.NewPaymentService(paymentRepo, pickupRepo, store, clk, pricing)
+	paymentHandler := handler.NewPaymentHandler(paymentService, handler.UploadPolicy{
+		MaxBytes:     cfg.UploadLimitBytes,
+		AllowedTypes: cfg.UploadAllowedTypes,
+	})
 	httpx.RegisterPaymentRoutes(server.API(), paymentHandler)
 
 	return &App{

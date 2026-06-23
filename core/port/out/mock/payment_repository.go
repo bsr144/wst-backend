@@ -39,4 +39,22 @@ func (m *PaymentRepository) Count(ctx context.Context, status *domain.PaymentSta
 	return args.Int(0), args.Error(1)
 }
 
+func (m *PaymentRepository) FindByID(ctx context.Context, id uuid.UUID) (domain.Payment, error) {
+	args := m.Called(ctx, id)
+	var p domain.Payment
+	if v := args.Get(0); v != nil {
+		p = v.(domain.Payment)
+	}
+	return p, args.Error(1)
+}
+
+func (m *PaymentRepository) Confirm(ctx context.Context, id uuid.UUID, proofURL string, now time.Time) (domain.Payment, bool, error) {
+	args := m.Called(ctx, id, proofURL, now)
+	var p domain.Payment
+	if v := args.Get(0); v != nil {
+		p = v.(domain.Payment)
+	}
+	return p, args.Bool(1), args.Error(2)
+}
+
 var _ out.PaymentRepository = (*PaymentRepository)(nil)

@@ -1,8 +1,14 @@
 package handler_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"io"
+	"mime/multipart"
 	"net/http"
+	"net/http/httptest"
+	"net/textproto"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -43,6 +49,15 @@ func (m *paymentServiceMock) List(ctx context.Context, filter in.PaymentFilter, 
 	return items, args.Int(1), args.Error(2)
 }
 
+func (m *paymentServiceMock) Confirm(ctx context.Context, id uuid.UUID, input in.ConfirmPaymentInput) (domain.Payment, error) {
+	args := m.Called(ctx, id, input)
+	var p domain.Payment
+	if v := args.Get(0); v != nil {
+		p = v.(domain.Payment)
+	}
+	return p, args.Error(1)
+}
+
 var _ in.PaymentService = (*paymentServiceMock)(nil)
 
 func newPaymentTestApp(svc in.PaymentService) *fiber.App {
@@ -51,8 +66,35 @@ func newPaymentTestApp(svc in.PaymentService) *fiber.App {
 			return presenter.Error(c, err)
 		},
 	})
-	httpx.RegisterPaymentRoutes(app.Group("/api"), handler.NewPaymentHandler(svc))
+	policy := handler.UploadPolicy{MaxBytes: 1024, AllowedTypes: []string{"image/jpeg", "image/png", "application/pdf"}}
+	httpx.RegisterPaymentRoutes(app.Group("/api"), handler.NewPaymentHandler(svc, policy))
 	return app
+}
+
+func confirmRequest(t *testing.T, app *fiber.App, target, field, partContentType string, content []byte) (*http.Response, map[string]any) {
+	t.Helper()
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", `form-data; name="`+field+`"; filename="proof.png"`)
+	if partContentType != "" {
+		header.Set("Content-Type", partContentType)
+	}
+	part, err := w.CreatePart(header)
+	require.NoError(t, err)
+	_, err = part.Write(content)
+	require.NoError(t, err)
+	require.NoError(t, w.Close())
+
+	req := httptest.NewRequest(http.MethodPut, target, &buf)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	resp, err := app.Test(req, -1)
+	require.NoError(t, err)
+	raw, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	var decoded map[string]any
+	_ = json.Unmarshal(raw, &decoded)
+	return resp, decoded
 }
 
 func TestPaymentHandler_Create_MalformedJSON(t *testing.T) {
@@ -269,5 +311,128 @@ func TestPaymentHandler_List_Defaults(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, float64(0), body["meta"].(map[string]any)["total"])
+	svc.AssertExpectations(t)
+}
+
+var pngContent = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR0000000000")
+
+func TestPaymentHandler_Confirm_Success(t *testing.T) {
+	t.Parallel()
+	id := uuid.New()
+	url := "http://minio:9000/proofs/payments/x/y.png"
+	proof := url
+	paid := domain.Payment{ID: id, Status: domain.PaymentPaid, Amount: decimal.NewFromInt(10000), ProofFileURL: &proof}
+
+	svc := new(paymentServiceMock)
+	svc.On("Confirm", mock.Anything, id, mock.MatchedBy(func(in in.ConfirmPaymentInput) bool {
+		return in.ContentType == "image/png" && in.Size == int64(len(pngContent))
+	})).Return(paid, nil).Once()
+	app := newPaymentTestApp(svc)
+
+	resp, body := confirmRequest(t, app, "/api/payments/"+id.String()+"/confirm", "proof", "application/octet-stream", pngContent)
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	data := body["data"].(map[string]any)
+	assert.Equal(t, "paid", data["status"])
+	assert.Equal(t, url, data["proof_file_url"])
+	svc.AssertExpectations(t)
+}
+
+func TestPaymentHandler_Confirm_MissingFile(t *testing.T) {
+	t.Parallel()
+	id := uuid.New()
+	svc := new(paymentServiceMock)
+	app := newPaymentTestApp(svc)
+
+	resp, body := confirmRequest(t, app, "/api/payments/"+id.String()+"/confirm", "wrong_field", "image/png", []byte("x"))
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	errBody := body["error"].(map[string]any)
+	assert.Equal(t, "VALIDATION_ERROR", errBody["code"])
+	assert.Equal(t, "proof", errBody["details"].([]any)[0].(map[string]any)["field"])
+	svc.AssertNotCalled(t, "Confirm", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestPaymentHandler_Confirm_TooLarge(t *testing.T) {
+	t.Parallel()
+	id := uuid.New()
+	svc := new(paymentServiceMock)
+	app := newPaymentTestApp(svc)
+
+	resp, body := confirmRequest(t, app, "/api/payments/"+id.String()+"/confirm", "proof", "image/png", make([]byte, 2000))
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	errBody := body["error"].(map[string]any)
+	assert.Equal(t, "VALIDATION_ERROR", errBody["code"])
+	assert.Equal(t, "proof", errBody["details"].([]any)[0].(map[string]any)["field"])
+	svc.AssertNotCalled(t, "Confirm", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestPaymentHandler_Confirm_DisallowedType(t *testing.T) {
+	t.Parallel()
+	id := uuid.New()
+	svc := new(paymentServiceMock)
+	app := newPaymentTestApp(svc)
+
+	resp, body := confirmRequest(t, app, "/api/payments/"+id.String()+"/confirm", "proof", "image/png", []byte("this is plain text masquerading as a png"))
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	errBody := body["error"].(map[string]any)
+	assert.Equal(t, "VALIDATION_ERROR", errBody["code"])
+	assert.Equal(t, "proof", errBody["details"].([]any)[0].(map[string]any)["field"])
+	svc.AssertNotCalled(t, "Confirm", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestPaymentHandler_Confirm_BadID(t *testing.T) {
+	t.Parallel()
+	svc := new(paymentServiceMock)
+	app := newPaymentTestApp(svc)
+
+	resp, body := confirmRequest(t, app, "/api/payments/not-a-uuid/confirm", "proof", "image/png", []byte("x"))
+
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	assert.Equal(t, "VALIDATION_ERROR", body["error"].(map[string]any)["code"])
+	svc.AssertNotCalled(t, "Confirm", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestPaymentHandler_Confirm_NotFound(t *testing.T) {
+	t.Parallel()
+	id := uuid.New()
+	svc := new(paymentServiceMock)
+	svc.On("Confirm", mock.Anything, id, mock.Anything).Return(domain.Payment{}, domain.ErrPaymentNotFound).Once()
+	app := newPaymentTestApp(svc)
+
+	resp, body := confirmRequest(t, app, "/api/payments/"+id.String()+"/confirm", "proof", "image/png", pngContent)
+
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	assert.Equal(t, "PAYMENT_NOT_FOUND", body["error"].(map[string]any)["code"])
+	svc.AssertExpectations(t)
+}
+
+func TestPaymentHandler_Confirm_NotPending(t *testing.T) {
+	t.Parallel()
+	id := uuid.New()
+	svc := new(paymentServiceMock)
+	svc.On("Confirm", mock.Anything, id, mock.Anything).Return(domain.Payment{}, domain.ErrPaymentNotPending).Once()
+	app := newPaymentTestApp(svc)
+
+	resp, body := confirmRequest(t, app, "/api/payments/"+id.String()+"/confirm", "proof", "image/png", pngContent)
+
+	assert.Equal(t, http.StatusConflict, resp.StatusCode)
+	assert.Equal(t, "PAYMENT_NOT_PENDING", body["error"].(map[string]any)["code"])
+	svc.AssertExpectations(t)
+}
+
+func TestPaymentHandler_Confirm_StorageUnavailable(t *testing.T) {
+	t.Parallel()
+	id := uuid.New()
+	svc := new(paymentServiceMock)
+	svc.On("Confirm", mock.Anything, id, mock.Anything).Return(domain.Payment{}, domain.ErrStorageUnavailable).Once()
+	app := newPaymentTestApp(svc)
+
+	resp, body := confirmRequest(t, app, "/api/payments/"+id.String()+"/confirm", "proof", "image/png", pngContent)
+
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+	assert.Equal(t, "STORAGE_UNAVAILABLE", body["error"].(map[string]any)["code"])
 	svc.AssertExpectations(t)
 }
