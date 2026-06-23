@@ -78,6 +78,11 @@ func New(ctx context.Context, cfg config.Config, logger *zap.Logger) (*App, erro
 	})
 	httpx.RegisterPaymentRoutes(server.API(), paymentHandler)
 
+	reportRepo := postgres.NewReportRepository(pool)
+	reportService := service.NewReportService(reportRepo, householdRepo)
+	reportHandler := handler.NewReportHandler(reportService)
+	httpx.RegisterReportRoutes(server.API(), reportHandler)
+
 	return &App{
 		cfg:       cfg,
 		logger:    logger,

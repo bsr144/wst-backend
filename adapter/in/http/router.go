@@ -29,3 +29,10 @@ func RegisterPaymentRoutes(api fiber.Router, h *handler.PaymentHandler) {
 	payments.Get("/", h.List)
 	payments.Put("/:id/confirm", h.Confirm)
 }
+
+func RegisterReportRoutes(api fiber.Router, h *handler.ReportHandler) {
+	reports := api.Group("/reports")
+	reports.Get("/waste-summary", h.WasteSummary)
+	reports.Get("/payment-summary", h.PaymentSummary)
+	reports.Get("/households/:id/history", h.HouseholdHistory)
+}
