@@ -65,9 +65,14 @@ func New(ctx context.Context, cfg config.Config, logger *zap.Logger) (*App, erro
 
 	pickupRepo := postgres.NewPickupRepository(pool)
 	paymentRepo := postgres.NewPaymentRepository(pool)
-	pickupService := service.NewPickupService(pickupRepo, paymentRepo, txManager, clk, domain.Pricing{Standard: cfg.Pricing.Standard, Electronic: cfg.Pricing.Electronic})
+	pricing := domain.Pricing{Standard: cfg.Pricing.Standard, Electronic: cfg.Pricing.Electronic}
+	pickupService := service.NewPickupService(pickupRepo, paymentRepo, txManager, clk, pricing)
 	pickupHandler := handler.NewPickupHandler(pickupService)
 	httpx.RegisterPickupRoutes(server.API(), pickupHandler, server.PickupRateLimit())
+
+	paymentService := service.NewPaymentService(paymentRepo, pickupRepo, clk, pricing)
+	paymentHandler := handler.NewPaymentHandler(paymentService)
+	httpx.RegisterPaymentRoutes(server.API(), paymentHandler)
 
 	return &App{
 		cfg:       cfg,

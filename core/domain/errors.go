@@ -13,6 +13,8 @@ var (
 	ErrSafetyCheckRequired = apperr.Unprocessable("SAFETY_CHECK_REQUIRED", "electronic pickup requires a passed safety check")
 	ErrPickupNotCancelable = apperr.Conflict("PICKUP_NOT_CANCELABLE", "pickup cannot be canceled in its current status")
 
-	ErrPaymentNotFound   = apperr.NotFound("PAYMENT_NOT_FOUND", "payment not found")
-	ErrPaymentNotPending = apperr.Conflict("PAYMENT_NOT_PENDING", "payment must be pending to confirm")
+	ErrPaymentNotFound          = apperr.NotFound("PAYMENT_NOT_FOUND", "payment not found")
+	ErrPaymentNotPending        = apperr.Conflict("PAYMENT_NOT_PENDING", "payment must be pending to confirm")
+	ErrPaymentAlreadyExists     = apperr.Conflict("PAYMENT_ALREADY_EXISTS", "a payment already exists for this pickup")
+	ErrPaymentHouseholdMismatch = apperr.Unprocessable("PAYMENT_HOUSEHOLD_MISMATCH", "household does not match the pickup")
 )

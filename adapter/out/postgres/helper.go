@@ -17,6 +17,14 @@ func statusArg(status *domain.PickupStatus) *string {
 	return &s
 }
 
+func paymentStatusArg(status *domain.PaymentStatus) *string {
+	if status == nil {
+		return nil
+	}
+	s := string(*status)
+	return &s
+}
+
 func (r *PickupRepository) returningOne(ctx context.Context, query string, args ...any) (domain.Pickup, bool, error) {
 	rows, err := Executor(ctx, r.pool).Query(ctx, query, args...)
 	if err != nil {

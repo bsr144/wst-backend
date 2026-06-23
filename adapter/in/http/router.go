@@ -22,3 +22,9 @@ func RegisterPickupRoutes(api fiber.Router, h *handler.PickupHandler, rateLimit 
 	pickups.Put("/:id/complete", h.Complete)
 	pickups.Put("/:id/cancel", h.Cancel)
 }
+
+func RegisterPaymentRoutes(api fiber.Router, h *handler.PaymentHandler) {
+	payments := api.Group("/payments")
+	payments.Post("/", h.Create)
+	payments.Get("/", h.List)
+}
