@@ -70,4 +70,9 @@ func (m *PickupRepository) Cancel(ctx context.Context, id uuid.UUID, now time.Ti
 	return p, args.Bool(1), args.Error(2)
 }
 
+func (m *PickupRepository) CancelStaleOrganic(ctx context.Context, olderThan, now time.Time) (int, error) {
+	args := m.Called(ctx, olderThan, now)
+	return args.Int(0), args.Error(1)
+}
+
 var _ out.PickupRepository = (*PickupRepository)(nil)

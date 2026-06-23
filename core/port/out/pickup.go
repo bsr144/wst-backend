@@ -17,4 +17,5 @@ type PickupRepository interface {
 	Schedule(ctx context.Context, id uuid.UUID, pickupDate, now time.Time) (domain.Pickup, bool, error)
 	Complete(ctx context.Context, id uuid.UUID, now time.Time) (domain.Pickup, bool, error)
 	Cancel(ctx context.Context, id uuid.UUID, now time.Time) (domain.Pickup, bool, error)
+	CancelStaleOrganic(ctx context.Context, olderThan, now time.Time) (int, error)
 }

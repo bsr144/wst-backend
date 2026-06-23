@@ -31,4 +31,5 @@ type PickupService interface {
 	Schedule(ctx context.Context, id uuid.UUID, cmd SchedulePickupCommand) (domain.Pickup, error)
 	Complete(ctx context.Context, id uuid.UUID) (domain.Pickup, error)
 	Cancel(ctx context.Context, id uuid.UUID) (domain.Pickup, error)
+	CancelStaleOrganic(ctx context.Context) (int, error)
 }

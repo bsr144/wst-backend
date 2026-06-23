@@ -116,4 +116,13 @@ func (r *PickupRepository) Cancel(ctx context.Context, id uuid.UUID, now time.Ti
 	return r.returningOne(ctx, query, id, now)
 }
 
+func (r *PickupRepository) CancelStaleOrganic(ctx context.Context, olderThan, now time.Time) (int, error) {
+	const query = `UPDATE waste_pickups SET status = 'canceled', updated_at = $2 WHERE type = 'organic' AND status IN ('pending', 'scheduled') AND created_at < $1`
+	tag, err := Executor(ctx, r.pool).Exec(ctx, query, olderThan, now)
+	if err != nil {
+		return 0, mapError(err)
+	}
+	return int(tag.RowsAffected()), nil
+}
+
 var _ out.PickupRepository = (*PickupRepository)(nil)

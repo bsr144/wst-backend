@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -12,15 +13,16 @@ import (
 )
 
 type PickupService struct {
-	pickups  out.PickupRepository
-	payments out.PaymentRepository
-	tx       out.TxManager
-	clock    out.Clock
-	pricing  domain.Pricing
+	pickups    out.PickupRepository
+	payments   out.PaymentRepository
+	tx         out.TxManager
+	clock      out.Clock
+	pricing    domain.Pricing
+	organicTTL time.Duration
 }
 
-func NewPickupService(pickups out.PickupRepository, payments out.PaymentRepository, tx out.TxManager, clock out.Clock, pricing domain.Pricing) *PickupService {
-	return &PickupService{pickups: pickups, payments: payments, tx: tx, clock: clock, pricing: pricing}
+func NewPickupService(pickups out.PickupRepository, payments out.PaymentRepository, tx out.TxManager, clock out.Clock, pricing domain.Pricing, organicTTL time.Duration) *PickupService {
+	return &PickupService{pickups: pickups, payments: payments, tx: tx, clock: clock, pricing: pricing, organicTTL: organicTTL}
 }
 
 func (s *PickupService) Create(ctx context.Context, cmd in.CreatePickupCommand) (domain.Pickup, error) {
@@ -127,6 +129,12 @@ func (s *PickupService) Cancel(ctx context.Context, id uuid.UUID) (domain.Pickup
 		return domain.Pickup{}, domain.ErrPickupNotCancelable
 	}
 	return pickup, nil
+}
+
+func (s *PickupService) CancelStaleOrganic(ctx context.Context) (int, error) {
+	now := s.clock.Now()
+	cutoff := now.Add(-s.organicTTL)
+	return s.pickups.CancelStaleOrganic(ctx, cutoff, now)
 }
 
 var _ in.PickupService = (*PickupService)(nil)

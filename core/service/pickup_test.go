@@ -27,6 +27,8 @@ func (passthroughTx) Do(ctx context.Context, fn func(ctx context.Context) error)
 
 var testPricing = domain.Pricing{Standard: decimal.NewFromInt(10000), Electronic: decimal.NewFromInt(50000)}
 
+const testOrganicTTL = 72 * time.Hour
+
 func TestPickupService_Create(t *testing.T) {
 	t.Parallel()
 
@@ -102,7 +104,7 @@ func TestPickupService_Create(t *testing.T) {
 			t.Parallel()
 			pickups := new(repomock.PickupRepository)
 			payments := new(repomock.PaymentRepository)
-			svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: now}, testPricing)
+			svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: now}, testPricing, testOrganicTTL)
 			tc.setup(pickups, payments)
 
 			got, err := svc.Create(context.Background(), tc.cmd)
@@ -133,7 +135,7 @@ func TestPickupService_List(t *testing.T) {
 	}
 	pickups := new(repomock.PickupRepository)
 	payments := new(repomock.PaymentRepository)
-	svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: now}, testPricing)
+	svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: now}, testPricing, testOrganicTTL)
 
 	params := pagination.Params{Page: 2, PerPage: 10}
 	pickups.On("List", mock.Anything, &status, &householdID, 10, 10).Return(items, nil).Once()
@@ -153,7 +155,7 @@ func TestPickupService_List_Error(t *testing.T) {
 	wantErr := apperr.Unavailable("SERVICE_UNAVAILABLE", "service temporarily unavailable")
 	pickups := new(repomock.PickupRepository)
 	payments := new(repomock.PaymentRepository)
-	svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: time.Now()}, testPricing)
+	svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: time.Now()}, testPricing, testOrganicTTL)
 
 	pickups.On("List", mock.Anything, (*domain.PickupStatus)(nil), (*uuid.UUID)(nil), 20, 0).Return(nil, wantErr).Once()
 
@@ -222,7 +224,7 @@ func TestPickupService_Schedule(t *testing.T) {
 			t.Parallel()
 			pickups := new(repomock.PickupRepository)
 			payments := new(repomock.PaymentRepository)
-			svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: now}, testPricing)
+			svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: now}, testPricing, testOrganicTTL)
 			tc.setup(pickups)
 
 			got, err := svc.Schedule(context.Background(), id, in.SchedulePickupCommand{PickupDate: pickupDate})
@@ -250,7 +252,7 @@ func TestPickupService_Complete(t *testing.T) {
 		completed := domain.Pickup{ID: id, HouseholdID: householdID, Type: domain.PickupElectronic, Status: domain.PickupCompleted, CreatedAt: now, UpdatedAt: now}
 		pickups := new(repomock.PickupRepository)
 		payments := new(repomock.PaymentRepository)
-		svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: now}, testPricing)
+		svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: now}, testPricing, testOrganicTTL)
 		pickups.On("Complete", mock.Anything, id, now).Return(completed, true, nil).Once()
 		payments.On("Insert", mock.Anything, mock.MatchedBy(func(p domain.Payment) bool {
 			return p.HouseholdID == householdID &&
@@ -276,7 +278,7 @@ func TestPickupService_Complete(t *testing.T) {
 		completed := domain.Pickup{ID: id, HouseholdID: householdID, Type: domain.PickupPlastic, Status: domain.PickupCompleted, CreatedAt: now, UpdatedAt: now}
 		pickups := new(repomock.PickupRepository)
 		payments := new(repomock.PaymentRepository)
-		svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: now}, testPricing)
+		svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: now}, testPricing, testOrganicTTL)
 		pickups.On("Complete", mock.Anything, id, now).Return(completed, true, nil).Once()
 		payments.On("Insert", mock.Anything, mock.MatchedBy(func(p domain.Payment) bool {
 			return p.Amount.Equal(decimal.NewFromInt(10000)) && p.Status == domain.PaymentPending
@@ -292,7 +294,7 @@ func TestPickupService_Complete(t *testing.T) {
 		t.Parallel()
 		pickups := new(repomock.PickupRepository)
 		payments := new(repomock.PaymentRepository)
-		svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: now}, testPricing)
+		svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: now}, testPricing, testOrganicTTL)
 		pickups.On("Complete", mock.Anything, id, now).Return(domain.Pickup{}, false, nil).Once()
 		pickups.On("FindByID", mock.Anything, id).Return(domain.Pickup{ID: id, Status: domain.PickupPending}, nil).Once()
 
@@ -307,7 +309,7 @@ func TestPickupService_Complete(t *testing.T) {
 		t.Parallel()
 		pickups := new(repomock.PickupRepository)
 		payments := new(repomock.PaymentRepository)
-		svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: now}, testPricing)
+		svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: now}, testPricing, testOrganicTTL)
 		pickups.On("Complete", mock.Anything, id, now).Return(domain.Pickup{}, false, nil).Once()
 		pickups.On("FindByID", mock.Anything, id).Return(domain.Pickup{}, domain.ErrPickupNotFound).Once()
 
@@ -361,7 +363,7 @@ func TestPickupService_Cancel(t *testing.T) {
 			t.Parallel()
 			pickups := new(repomock.PickupRepository)
 			payments := new(repomock.PaymentRepository)
-			svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: now}, testPricing)
+			svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: now}, testPricing, testOrganicTTL)
 			tc.setup(pickups)
 
 			got, err := svc.Cancel(context.Background(), id)
@@ -371,6 +373,64 @@ func TestPickupService_Cancel(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, domain.PickupCanceled, got.Status)
+			}
+			pickups.AssertExpectations(t)
+		})
+	}
+}
+
+func TestPickupService_CancelStaleOrganic(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 6, 22, 10, 0, 0, 0, time.UTC)
+	cutoff := now.Add(-testOrganicTTL)
+	infraErr := apperr.Unavailable("SERVICE_UNAVAILABLE", "service temporarily unavailable")
+
+	tests := []struct {
+		name      string
+		setup     func(*repomock.PickupRepository)
+		wantCount int
+		wantErr   error
+	}{
+		{
+			name: "cancels stale organic pickups",
+			setup: func(p *repomock.PickupRepository) {
+				p.On("CancelStaleOrganic", mock.Anything, cutoff, now).Return(3, nil).Once()
+			},
+			wantCount: 3,
+		},
+		{
+			name: "none stale returns zero",
+			setup: func(p *repomock.PickupRepository) {
+				p.On("CancelStaleOrganic", mock.Anything, cutoff, now).Return(0, nil).Once()
+			},
+			wantCount: 0,
+		},
+		{
+			name: "repo infra error propagates",
+			setup: func(p *repomock.PickupRepository) {
+				p.On("CancelStaleOrganic", mock.Anything, cutoff, now).Return(0, infraErr).Once()
+			},
+			wantErr: infraErr,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			pickups := new(repomock.PickupRepository)
+			payments := new(repomock.PaymentRepository)
+			svc := service.NewPickupService(pickups, payments, passthroughTx{}, fixedClock{now: now}, testPricing, testOrganicTTL)
+			tc.setup(pickups)
+
+			got, err := svc.CancelStaleOrganic(context.Background())
+
+			if tc.wantErr != nil {
+				require.ErrorIs(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.wantCount, got)
 			}
 			pickups.AssertExpectations(t)
 		})

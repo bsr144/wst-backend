@@ -56,7 +56,6 @@ func New(ctx context.Context, cfg config.Config, logger *zap.Logger) (*App, erro
 	}
 
 	server := httpx.NewServer(cfg, logger, ready, limiter)
-	scheduler := worker.New(logger)
 
 	householdRepo := postgres.NewHouseholdRepository(pool)
 	householdService := service.NewHouseholdService(householdRepo, clk)
@@ -66,9 +65,11 @@ func New(ctx context.Context, cfg config.Config, logger *zap.Logger) (*App, erro
 	pickupRepo := postgres.NewPickupRepository(pool)
 	paymentRepo := postgres.NewPaymentRepository(pool)
 	pricing := domain.Pricing{Standard: cfg.Pricing.Standard, Electronic: cfg.Pricing.Electronic}
-	pickupService := service.NewPickupService(pickupRepo, paymentRepo, txManager, clk, pricing)
+	pickupService := service.NewPickupService(pickupRepo, paymentRepo, txManager, clk, pricing, cfg.Worker.OrganicTTL)
 	pickupHandler := handler.NewPickupHandler(pickupService)
 	httpx.RegisterPickupRoutes(server.API(), pickupHandler, server.PickupRateLimit())
+
+	scheduler := worker.New(logger, worker.AutoCancelOrganic(pickupService, cfg.Worker.SweepInterval, logger))
 
 	paymentService := service.NewPaymentService(paymentRepo, pickupRepo, store, clk, pricing)
 	paymentHandler := handler.NewPaymentHandler(paymentService, handler.UploadPolicy{

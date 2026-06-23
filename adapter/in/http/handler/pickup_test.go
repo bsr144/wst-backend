@@ -68,6 +68,11 @@ func (m *pickupServiceMock) Cancel(ctx context.Context, id uuid.UUID) (domain.Pi
 	return p, args.Error(1)
 }
 
+func (m *pickupServiceMock) CancelStaleOrganic(ctx context.Context) (int, error) {
+	args := m.Called(ctx)
+	return args.Int(0), args.Error(1)
+}
+
 var _ in.PickupService = (*pickupServiceMock)(nil)
 
 func newPickupTestApp(svc in.PickupService) *fiber.App {
