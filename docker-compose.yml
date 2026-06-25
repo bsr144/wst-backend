@@ -65,8 +65,8 @@ services:
       MINIO_SECRET_KEY: minioadmin
       MINIO_BUCKET: proofs
       MINIO_USE_SSL: "false"
-      PRICE_STANDARD: "10000"
-      PRICE_ELECTRONIC: "50000"
+      PRICE_STANDARD: "50000"
+      PRICE_ELECTRONIC: "100000"
       SWEEP_INTERVAL: 1m
       ORGANIC_TTL: 72h
       PICKUP_RATE_RPM: "30"

@@ -17,9 +17,9 @@ import (
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	pg "wst-backend/adapter/out/postgres"
-	"wst-backend/core/domain"
 	"wst-backend/db"
+	pg "wst-backend/internal/adapter/out/postgres"
+	"wst-backend/internal/core/domain"
 )
 
 var testPool *pgxpool.Pool

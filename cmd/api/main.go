@@ -12,9 +12,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"wst-backend/config"
 	"wst-backend/db"
 	"wst-backend/internal/app"
+	"wst-backend/internal/config"
 )
 
 func main() {

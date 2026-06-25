@@ -13,11 +13,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"wst-backend/adapter/out/clock"
-	pg "wst-backend/adapter/out/postgres"
-	"wst-backend/core/domain"
-	"wst-backend/core/port/in"
-	"wst-backend/core/service"
+	"wst-backend/internal/adapter/out/clock"
+	pg "wst-backend/internal/adapter/out/postgres"
+	"wst-backend/internal/core/domain"
+	"wst-backend/internal/core/port/in"
+	"wst-backend/internal/core/service/pickup"
 )
 
 func TestTxManager_RollsBackOnError(t *testing.T) {
@@ -82,12 +82,12 @@ func TestComplete_CreatesPaymentInSameTransaction(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, list, 1)
 	assert.Equal(t, pickup.ID, list[0].WasteID)
-	assert.True(t, list[0].Amount.Equal(decimal.NewFromInt(50000)), "electronic price expected; got %s", list[0].Amount)
+	assert.True(t, list[0].Amount.Equal(decimal.NewFromInt(100000)), "electronic price expected; got %s", list[0].Amount)
 }
 
-func newPickupService() *service.PickupService {
-	pricing := domain.Pricing{Standard: decimal.NewFromInt(10000), Electronic: decimal.NewFromInt(50000)}
-	return service.NewPickupService(
+func newPickupService() *pickup.Service {
+	pricing := domain.Pricing{Standard: decimal.NewFromInt(50000), Electronic: decimal.NewFromInt(100000)}
+	return pickup.NewService(
 		pg.NewPickupRepository(testPool),
 		pg.NewPaymentRepository(testPool),
 		pg.NewTxManager(testPool),

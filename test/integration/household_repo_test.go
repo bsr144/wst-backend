@@ -10,8 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	pg "wst-backend/adapter/out/postgres"
-	"wst-backend/core/domain"
+	pg "wst-backend/internal/adapter/out/postgres"
+	"wst-backend/internal/core/domain"
 )
 
 func TestHouseholdRepository_DeleteRestrictsWithDependents(t *testing.T) {

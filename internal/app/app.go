@@ -7,17 +7,20 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	httpx "wst-backend/adapter/in/http"
-	"wst-backend/adapter/in/http/handler"
-	"wst-backend/adapter/in/http/middleware"
-	"wst-backend/adapter/in/worker"
-	"wst-backend/adapter/out/clock"
-	"wst-backend/adapter/out/postgres"
-	"wst-backend/adapter/out/storage"
-	"wst-backend/config"
-	"wst-backend/core/domain"
-	"wst-backend/core/port/out"
-	"wst-backend/core/service"
+	httpx "wst-backend/internal/adapter/in/http"
+	"wst-backend/internal/adapter/in/http/handler"
+	"wst-backend/internal/adapter/in/http/middleware"
+	"wst-backend/internal/adapter/in/worker"
+	"wst-backend/internal/adapter/out/clock"
+	"wst-backend/internal/adapter/out/postgres"
+	"wst-backend/internal/adapter/out/storage"
+	"wst-backend/internal/config"
+	"wst-backend/internal/core/domain"
+	"wst-backend/internal/core/port/out"
+	"wst-backend/internal/core/service/household"
+	"wst-backend/internal/core/service/payment"
+	"wst-backend/internal/core/service/pickup"
+	"wst-backend/internal/core/service/report"
 )
 
 type App struct {
@@ -58,20 +61,20 @@ func New(ctx context.Context, cfg config.Config, logger *zap.Logger) (*App, erro
 	server := httpx.NewServer(cfg, logger, ready, limiter)
 
 	householdRepo := postgres.NewHouseholdRepository(pool)
-	householdService := service.NewHouseholdService(householdRepo, clk)
+	householdService := household.NewService(householdRepo, clk)
 	householdHandler := handler.NewHouseholdHandler(householdService)
 	httpx.RegisterRoutes(server.API(), householdHandler)
 
 	pickupRepo := postgres.NewPickupRepository(pool)
 	paymentRepo := postgres.NewPaymentRepository(pool)
 	pricing := domain.Pricing{Standard: cfg.Pricing.Standard, Electronic: cfg.Pricing.Electronic}
-	pickupService := service.NewPickupService(pickupRepo, paymentRepo, txManager, clk, pricing, cfg.Worker.OrganicTTL)
+	pickupService := pickup.NewService(pickupRepo, paymentRepo, txManager, clk, pricing, cfg.Worker.OrganicTTL)
 	pickupHandler := handler.NewPickupHandler(pickupService)
 	httpx.RegisterPickupRoutes(server.API(), pickupHandler, server.PickupRateLimit())
 
 	scheduler := worker.New(logger, worker.AutoCancelOrganic(pickupService, cfg.Worker.SweepInterval, logger))
 
-	paymentService := service.NewPaymentService(paymentRepo, pickupRepo, store, clk, pricing)
+	paymentService := payment.NewService(paymentRepo, pickupRepo, store, clk, pricing)
 	paymentHandler := handler.NewPaymentHandler(paymentService, handler.UploadPolicy{
 		MaxBytes:     cfg.UploadLimitBytes,
 		AllowedTypes: cfg.UploadAllowedTypes,
@@ -79,7 +82,7 @@ func New(ctx context.Context, cfg config.Config, logger *zap.Logger) (*App, erro
 	httpx.RegisterPaymentRoutes(server.API(), paymentHandler)
 
 	reportRepo := postgres.NewReportRepository(pool)
-	reportService := service.NewReportService(reportRepo, householdRepo)
+	reportService := report.NewService(reportRepo, householdRepo)
 	reportHandler := handler.NewReportHandler(reportService)
 	httpx.RegisterReportRoutes(server.API(), reportHandler)
 

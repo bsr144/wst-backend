@@ -1,5 +1,7 @@
-.PHONY: run dev build test test-integration lint format mockery \
+.PHONY: run dev build test test-integration cover lint format mockery \
 	migrate-up migrate-down migrate-create seed up down logs
+
+SERVICE_PKGS := wst-backend/internal/core/service/household,wst-backend/internal/core/service/pickup,wst-backend/internal/core/service/payment,wst-backend/internal/core/service/report
 
 run:
 	go run ./cmd/api
@@ -15,6 +17,10 @@ test:
 
 test-integration:
 	go test -tags=integration ./test/integration/...
+
+cover:
+	go test -race -covermode=atomic -coverpkg=$(SERVICE_PKGS) -coverprofile=coverage.out ./internal/core/service/...
+	go tool cover -func=coverage.out | tail -1
 
 lint:
 	golangci-lint run ./...

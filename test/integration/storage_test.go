@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"net/http"
 	"testing"
 	"time"
 
@@ -17,8 +18,8 @@ import (
 	tcminio "github.com/testcontainers/testcontainers-go/modules/minio"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"wst-backend/adapter/out/storage"
-	"wst-backend/config"
+	"wst-backend/internal/adapter/out/storage"
+	"wst-backend/internal/config"
 )
 
 func TestMinIOStorage_PutRoundTrip(t *testing.T) {
@@ -68,4 +69,12 @@ func TestMinIOStorage_PutRoundTrip(t *testing.T) {
 	got, err := io.ReadAll(obj)
 	require.NoError(t, err)
 	assert.Equal(t, content, got)
+
+	anonResp, err := http.Get(url)
+	require.NoError(t, err)
+	defer anonResp.Body.Close()
+	assert.Equal(t, http.StatusOK, anonResp.StatusCode)
+	anonBody, err := io.ReadAll(anonResp.Body)
+	require.NoError(t, err)
+	assert.Equal(t, content, anonBody)
 }
